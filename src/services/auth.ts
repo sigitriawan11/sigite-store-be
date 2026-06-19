@@ -10,8 +10,6 @@ import moment from "moment-timezone"
 
 export class AuthService {
     static async createUser(payload: RequestCreateUser): Promise<ResponseCreateUser> {
-        await UserRepository.findUserByEmailNotDeletedAndActive(payload.email)
-
         return AuthRepositories.createUser(payload)
     }
 
@@ -40,7 +38,11 @@ export class AuthService {
             await AuthRepositories.resetLockedAccount(user.email!)
         }
 
-        const check_password = await AuthRepositories.checkPasswordAuth(password, user.password!)
+        if(!user.password){
+            throw new ErrBadRequest("Login failed. Please check your email and password.")
+        }
+
+        const check_password = await AuthRepositories.checkPasswordAuth(password, user.password)
 
         if (!check_password) {
             await AuthRepositories.failedLogin(user.email!);

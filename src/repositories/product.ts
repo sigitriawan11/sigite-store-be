@@ -18,6 +18,27 @@ export class ProductRepository {
         return result!.data
     }
 
+    static async getAdminProductList(payload: {
+        page: number;
+        pageSize: number;
+        search: string;
+        categoryId: number | null;
+    }) {
+        const [result] = await sequelize_main.query<{
+            data: any;
+        }>(`select * from apps.f_product_list(:page,:pageSize,:search,:categoryId) as data`, {
+            replacements: {
+                page: payload.page,
+                pageSize: payload.pageSize,
+                search: payload.search || '',
+                categoryId: payload.categoryId,
+            },
+            type: QueryTypes.SELECT
+        })
+
+        return result!.data
+    }
+
     static async getProductCategoryBySlug (slug:string) : Promise<ResponseProductBySlug> {
         const [result] = await sequelize_main.query<{
             data: ResponseProductBySlug

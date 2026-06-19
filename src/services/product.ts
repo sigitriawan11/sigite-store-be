@@ -8,4 +8,12 @@ export class ProductService {
     static async getProductCategoryBySlug(payload: string){
         return await ProductRepository.getProductCategoryBySlug(payload)
     }
+    static async getAdminProductList(payload: {
+        page: number;
+        pageSize: number;
+        search: string;
+        categoryId: number | null;
+    }){
+        return await ProductRepository.getAdminProductList(payload)
+    }
 }

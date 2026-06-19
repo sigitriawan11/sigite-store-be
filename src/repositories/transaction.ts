@@ -3,7 +3,10 @@ import { Transaction } from "../databases/main.db";
 import { TransactionAttributes } from "../models/transaction.model";
 import { PaymentType, TransactionStatus } from "../types/transaction-type";
 
-type CreateTransactionPayload = Omit<TransactionAttributes, "id" | "created_at" | "updated_at">;
+type CreateTransactionPayload = Omit<TransactionAttributes, "id" | "created_at" | "updated_at" | "status_provider" | "paid_at"> & {
+  status_provider?: string | null;
+  paid_at?: Date | null;
+};
 
 export class TransactionRepository {
   static async create(
@@ -16,9 +19,19 @@ export class TransactionRepository {
 
   static async updateStatus(
     ref_id: string,
-    status: TransactionStatus
+    status: TransactionStatus,
+    extra?: Partial<Pick<TransactionAttributes, "paid_at" | "status_provider">>
   ): Promise<void> {
-    await Transaction.update({ status }, { where: { ref_id } });
+    const updateData: Partial<TransactionAttributes> = { status };
+
+    if (status === "PAID" && extra?.paid_at) {
+      updateData.paid_at = extra.paid_at;
+    }
+    if (extra?.status_provider !== undefined) {
+      updateData.status_provider = extra.status_provider;
+    }
+
+    await Transaction.update(updateData, { where: { ref_id } });
   }
 
   static async findByRefId(ref_id: string): Promise<TransactionAttributes | null> {

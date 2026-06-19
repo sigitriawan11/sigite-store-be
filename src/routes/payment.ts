@@ -1,8 +1,13 @@
-import { NextFunction, Request, Response, Router } from "express";
+import express, { NextFunction, Request, Response, Router } from "express";
 import { PaymentService } from "../services/payment";
 import { TransactionService } from "../services/transaction";
+import { WebhookService } from "../services/webhook";
 import { Validation } from "../validation";
 import { TransactionValidation } from "../validation/transaction.validation";
+import {
+  xenditWebhookVerification,
+  digiflazzWebhookVerification,
+} from "../middlerware/webhook-middleware";
 
 const PaymentRoute = Router();
 
@@ -20,6 +25,32 @@ PaymentRoute.get('/invoice/:ref_id', async (req: Request, res: Response, next: N
         const { ref_id } = req.params as { ref_id: string }
         const data = await TransactionService.getInvoice(ref_id)
         res.status(200).json({ status: true, message: "Get invoice success", data })
+    } catch (error) {
+        next(error)
+    }
+})
+
+
+
+
+PaymentRoute.post('/webhook', xenditWebhookVerification, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await WebhookService.handleXenditCallback(req.body)
+        res.status(200).json(result)
+    } catch (error) {
+        next(error)
+    }
+})
+
+
+
+
+
+
+PaymentRoute.post('/digiflazz-webhook', digiflazzWebhookVerification, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await WebhookService.handleDigiflazzCallback(req.body)
+        res.status(200).json(result)
     } catch (error) {
         next(error)
     }

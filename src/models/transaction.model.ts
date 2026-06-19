@@ -16,6 +16,8 @@ export interface TransactionAttributes {
   qr_string: string | null;
   va_number: string | null;
   expired_at: Date | null;
+  status_provider: string | null;
+  paid_at: Date | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -39,6 +41,8 @@ class Transaction
   public qr_string!: string | null;
   public va_number!: string | null;
   public expired_at!: Date | null;
+  public status_provider!: string | null;
+  public paid_at!: Date | null;
   public created_at?: Date;
   public updated_at?: Date;
 }
@@ -103,6 +107,14 @@ export const TransactionModel = (sequelize: Sequelize) => {
         allowNull: true,
       },
       expired_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      status_provider: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+      },
+      paid_at: {
         type: DataTypes.DATE,
         allowNull: true,
       },

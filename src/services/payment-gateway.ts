@@ -35,7 +35,7 @@ export async function createPayment(opts: CreatePaymentOptions) {
 
   let data: PaymentRequestParameters;
 
-  if (channel.type === 'QR_CODE') {
+  if (channel.type === 'QR_CODE' || 'EWALLET') {
     data = {
       amount,
       currency: 'IDR',
@@ -45,18 +45,6 @@ export async function createPayment(opts: CreatePaymentOptions) {
         type: 'QR_CODE',
         reusability: 'ONE_TIME_USE',
         qrCode: { channelCode: channel.code as QRCodeChannelCode },
-      },
-    };
-  } else if (channel.type === 'EWALLET') {
-    data = {
-      amount,
-      currency: 'IDR',
-      referenceId,
-      metadata: resolvedMetadata,
-      paymentMethod: {
-        type: 'EWALLET',
-        reusability: 'ONE_TIME_USE',
-        ewallet: { channelCode: channel.code as EWalletChannelCode },
       },
     };
   } else if (channel.type === 'BANK_TRANSFER') {

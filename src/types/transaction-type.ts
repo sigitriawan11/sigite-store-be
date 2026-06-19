@@ -27,7 +27,7 @@ export interface InvoiceProduct {
 export interface InvoiceChannel {
   code: string;
   name: string;
-  image: string;
+  image: string | null;
   type: PaymentType;
 }
 
@@ -36,6 +36,7 @@ export interface InvoiceResult {
   amount: number;
   payment_type: PaymentType;
   status: TransactionStatus;
+  status_provider: string | null;
   qr_string: string | null;
   va_number: string | null;
   expired_at: string | null;
@@ -45,7 +46,10 @@ export interface InvoiceResult {
   account_data: Record<string, unknown>;
   product: InvoiceProduct;
   channel: InvoiceChannel;
+  paid_at: string | null;
 }
+
+export type ProviderStatus = 'Pending' | 'Process' | 'Success';
 
 export type TransactionStatus = 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED';
 export type PaymentType = 'QR_CODE' | 'BANK_TRANSFER';

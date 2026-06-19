@@ -1,12 +1,28 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 
+const googleClientId = process.env.AUTH_CLIENT_ID ?? process.env.GOOGLE_CLIENT_ID;
+const googleClientSecret =
+  process.env.AUTH_CLIENT_SECRET ?? process.env.GOOGLE_CLIENT_SECRET;
+
+if (!googleClientId || !googleClientSecret) {
+  throw new Error(
+    "Google OAuth env is missing. Set AUTH_CLIENT_ID/AUTH_CLIENT_SECRET (or GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET)."
+  );
+}
+
+const callbackURL =
+  process.env.AUTH_CALLBACK_URL ??
+  (process.env.URL_BE
+    ? `${process.env.URL_BE.replace(/\/$/, "")}/v1/auth/google/callback`
+    : "/v1/auth/google/callback");
+
 passport.use(
   new GoogleStrategy(
     {
-      clientID: process.env.AUTH_CLIENT_ID!,
-      clientSecret: process.env.AUTH_CLIENT_SECRET!,
-      callbackURL: "/v1/auth/google/callback",
+      clientID: googleClientId,
+      clientSecret: googleClientSecret,
+      callbackURL,
     },
     async (accessToken, refreshToken, profile, done) => {
 

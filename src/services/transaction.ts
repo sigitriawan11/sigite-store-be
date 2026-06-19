@@ -43,13 +43,25 @@ export class TransactionService {
 
     const channel = await PaymentRepository.getChannelByCode(transaction.channel_code);
 
+    
+    const channelImage = channel.image
+      ? channel.image.startsWith("http")
+        ? channel.image
+        : `${process.env.URL_BE}${channel.image.startsWith("/") ? "" : "/"}${channel.image}`
+      : null;
+
+    const isExpired = transaction.status === 'EXPIRED';
+    const vaNumber = isExpired ? '-' : (transaction.va_number ?? null);
+    const qrString  = isExpired ? '-' : (transaction.qr_string ?? null);
+
     return {
       ref_id: transaction.ref_id,
       amount: Number(transaction.amount),
       payment_type: transaction.payment_type,
       status: transaction.status,
-      qr_string: transaction.qr_string,
-      va_number: transaction.va_number,
+      status_provider: transaction.status_provider ?? null,
+      qr_string: qrString,
+      va_number: vaNumber,
       expired_at: transaction.expired_at ? transaction.expired_at.toISOString() : null,
       created_at: transaction.created_at ? transaction.created_at.toISOString() : new Date().toISOString(),
       phone: transaction.phone,
@@ -59,9 +71,10 @@ export class TransactionService {
       channel: {
         code: channel.code,
         name: channel.name,
-        image: channel.image,
+        image: channelImage,
         type: channel.type,
       },
+      paid_at: transaction.paid_at ? transaction.paid_at.toISOString() : null,
     };
   }
 
@@ -87,27 +100,49 @@ export class TransactionService {
 
     const ref_id = `TRX-${uuidv4().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
 
-    const xenditResponse = await createPayment({
-      amount,
-      referenceId: ref_id,
-      channel: {
-        id: 0,
-        code: channel.channel_code,
-        channel_code: channel.channel_code,
-        name: channel.name,
-        type: channel.type as 'QR_CODE' | 'BANK_TRANSFER',
-        min_amount: channel.min,
-        max_amount: channel.max,
-      },
-      customerName: dto.phone,
-      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
-      metadata: {
-        product_code: dto.product_code,
-        phone: dto.phone,
-        email: dto.email,
-        account_data: dto.account_data,
-      },
-    });
+    
+    let xenditResponse: any;
+
+    if (process.env.NODE_ENV === 'STAGING') {
+      
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+      xenditResponse = {
+        id: "STAGING_SANDBOX_" + ref_id,
+        paymentMethod: {
+          qrCode: channel.type === "QR_CODE"
+            ? { channelProperties: { qrString: "STAGING_SANDBOX", expiresAt } }
+            : undefined,
+          virtualAccount: channel.type === "BANK_TRANSFER"
+            ? { channelProperties: { virtualAccountNumber: "1212123456789", expiresAt } }
+            : undefined,
+        },
+      };
+    } else {
+      
+      xenditResponse = await createPayment({
+        amount,
+        referenceId: ref_id,
+        channel: {
+          id: 0,
+          code: channel.channel_code,
+          channel_code: channel.channel_code,
+          name: channel.name,
+          type: channel.type as 'QR_CODE' | 'BANK_TRANSFER',
+          min_amount: channel.min,
+          max_amount: channel.max,
+        },
+        customerName: dto.phone,
+        expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+        metadata: {
+          product_code: dto.product_code,
+          phone: dto.phone,
+          email: dto.email,
+          account_data: dto.account_data,
+        },
+      });
+    }
 
     const qr_string =
       xenditResponse.paymentMethod?.qrCode?.channelProperties?.qrString ?? null;

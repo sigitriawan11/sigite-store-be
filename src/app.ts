@@ -6,10 +6,11 @@ import { logger } from "./middlerware/logger";
 import { errorMiddleware } from "./middlerware/error-middleware";
 import router from "./routes";
 import passport from "./config/passport";
-import session from "express-session"
 import cookieParser from "cookie-parser";
 import path from "path";
 import { startSyncProductDigiflazzCron } from "./jobs/digiflazzCron";
+import { checkExpiredTransactions } from "./jobs/expiredCron";
+import cron from "node-cron";
 const app = express();
 
 app.use(cors({
@@ -21,16 +22,7 @@ app.use(express.json());
 app.use(logger)
 app.set("trust proxy", true);
 
-app.use(
-  session({
-    secret: "secret",
-    resave: false,
-    saveUninitialized: false,
-  })
-);
-
 app.use(passport.initialize());
-app.use(passport.session());
 
 app.use(
   "/images",
@@ -46,6 +38,11 @@ app.use(
 );
 
 startSyncProductDigiflazzCron();
+
+
+cron.schedule("* * * * *", () => {
+    checkExpiredTransactions();
+});
 
 app.use('/v1/', router)
 

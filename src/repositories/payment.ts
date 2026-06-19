@@ -38,8 +38,8 @@ export class PaymentRepository {
     static async getChannelByCode(code: string): Promise<PaymentChannel> {
         const [result] = await sequelize_main.query<{
             data: PaymentChannel | null
-        }>(`select * from apps.f_get_payment_channel_by_code(:code) as data`, {
-            replacements: { code },
+        }>(`select * from apps.f_get_payment_channel_by_code(:code, :url_be) as data`, {
+            replacements: { code, url_be: process.env.URL_BE },
             type: QueryTypes.SELECT
         })
 
