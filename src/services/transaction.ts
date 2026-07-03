@@ -3,9 +3,17 @@ import { QueryTypes } from "sequelize";
 import { createPayment } from "./payment-gateway";
 import { PaymentRepository } from "../repositories/payment";
 import { TransactionRepository } from "../repositories/transaction";
+import { DigiflazzService } from "./digiflazz";
 import { sequelize_main } from "../databases/main.db";
 import { ErrBadRequest, ErrNotFound } from "../config/errors";
 import { CreateOrderDTO, InvoiceResult, OrderResult } from "../types/transaction-type";
+
+interface BalanceOrderDTO {
+  product_code: string;
+  phone: string;
+  email: string;
+  account_data: Record<string, string>;
+}
 
 export class TransactionService {
   static async getInvoice(ref_id: string): Promise<InvoiceResult> {
@@ -41,14 +49,18 @@ export class TransactionService {
       throw new ErrNotFound(`Product '${transaction.product_code}' not found`);
     }
 
-    const channel = await PaymentRepository.getChannelByCode(transaction.channel_code);
-
-    
-    const channelImage = channel.image
-      ? channel.image.startsWith("http")
-        ? channel.image
-        : `${process.env.URL_BE}${channel.image.startsWith("/") ? "" : "/"}${channel.image}`
-      : null;
+    let channelInfo: { code: string; name: string; image: string | null; type: any };
+    if (transaction.channel_code === "SALDO" || transaction.payment_type === "BALANCE") {
+      channelInfo = { code: "SALDO", name: "Saldo Wallet", image: null, type: "BALANCE" };
+    } else {
+      const channel = await PaymentRepository.getChannelByCode(transaction.channel_code);
+      const channelImage = channel.image
+        ? channel.image.startsWith("http")
+          ? channel.image
+          : `${process.env.URL_BE}${channel.image.startsWith("/") ? "" : "/"}${channel.image}`
+        : null;
+      channelInfo = { code: channel.code, name: channel.name, image: channelImage, type: channel.type };
+    }
 
     const isExpired = transaction.status === 'EXPIRED';
     const vaNumber = isExpired ? '-' : (transaction.va_number ?? null);
@@ -68,17 +80,90 @@ export class TransactionService {
       email: transaction.email,
       account_data: transaction.account_data,
       product: productRow,
-      channel: {
-        code: channel.code,
-        name: channel.name,
-        image: channelImage,
-        type: channel.type,
-      },
+      channel: channelInfo,
       paid_at: transaction.paid_at ? transaction.paid_at.toISOString() : null,
     };
   }
 
-  static async createOrder(dto: CreateOrderDTO): Promise<OrderResult> {
+  static async createOrderWithBalance(userId: string, dto: BalanceOrderDTO) {
+    const product = await TransactionService.resolveProductPrice(dto.product_code);
+    const amount = Math.round(Number(product.price));
+    const ref_id = `TRX-${uuidv4().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
+    const paidAt = new Date();
+
+    await sequelize_main.transaction(async (t) => {
+      const balRows: any[] = await sequelize_main.query(
+        `SELECT balance::float AS balance FROM apps.user_balances WHERE user_id = :uid FOR UPDATE`,
+        { replacements: { uid: userId }, type: QueryTypes.SELECT, transaction: t }
+      );
+      const before = balRows.length ? Number(balRows[0].balance) : 0;
+
+      if (before < amount) {
+        throw new ErrBadRequest("Insufficient balance");
+      }
+
+      const after = before - amount;
+
+      await sequelize_main.query(
+        `UPDATE apps.user_balances SET balance = :b, updated_at = NOW() WHERE user_id = :uid`,
+        { replacements: { b: after, uid: userId }, type: QueryTypes.UPDATE, transaction: t }
+      );
+
+      await sequelize_main.query(
+        `INSERT INTO apps.balance_logs (id, user_id, type, amount, balance_before, balance_after, transaction_id, description, created_at)
+         VALUES (gen_random_uuid(), :uid, 'PURCHASE', :amt, :bef, :aft, :tx, :desc, NOW())`,
+        {
+          replacements: {
+            uid: userId,
+            amt: -amount,
+            bef: before,
+            aft: after,
+            tx: ref_id,
+            desc: `Order ${dto.product_code}`,
+          },
+          type: QueryTypes.INSERT,
+          transaction: t,
+        }
+      );
+
+      await TransactionRepository.create(
+        {
+          ref_id,
+          user_id: userId,
+          product_code: dto.product_code,
+          channel_code: "SALDO",
+          amount,
+          phone: dto.phone,
+          email: dto.email,
+          account_data: dto.account_data,
+          status: "PAID",
+          payment_type: "BALANCE",
+          xendit_id: null,
+          qr_string: null,
+          va_number: null,
+          expired_at: null,
+          status_provider: "Process",
+          paid_at: paidAt,
+        },
+        t
+      );
+    });
+
+    try {
+      const customerNo = (dto.account_data as any)?.customer_no || dto.phone;
+      await DigiflazzService.createTransaction({
+        ref_id,
+        product_code: dto.product_code,
+        customer_no: customerNo,
+      });
+    } catch (err) {
+      console.error(`[balance-order] Digiflazz failed for ${ref_id}:`, (err as Error)?.message);
+    }
+
+    return { ref_id, amount, status: "PAID", payment_type: "BALANCE" };
+  }
+
+  static async createOrder(dto: CreateOrderDTO, userId?: string | null): Promise<OrderResult> {
     const channel = await PaymentRepository.getChannelByCode(dto.channel_code);
 
     const product = await TransactionService.resolveProductPrice(dto.product_code);
@@ -100,21 +185,26 @@ export class TransactionService {
 
     const ref_id = `TRX-${uuidv4().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
 
-    
+    const channelType = channel.type as string;
+    const isQrPayment = channelType === "QR_CODE" || channelType === "EWALLET";
+    const normalizedPaymentType: "QR_CODE" | "BANK_TRANSFER" = isQrPayment
+      ? "QR_CODE"
+      : "BANK_TRANSFER";
+
     let xenditResponse: any;
 
     if (process.env.NODE_ENV === 'STAGING') {
-      
+
       const now = new Date();
       const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
       xenditResponse = {
         id: "STAGING_SANDBOX_" + ref_id,
         paymentMethod: {
-          qrCode: channel.type === "QR_CODE"
+          qrCode: isQrPayment
             ? { channelProperties: { qrString: "STAGING_SANDBOX", expiresAt } }
             : undefined,
-          virtualAccount: channel.type === "BANK_TRANSFER"
+          virtualAccount: !isQrPayment
             ? { channelProperties: { virtualAccountNumber: "1212123456789", expiresAt } }
             : undefined,
         },
@@ -161,6 +251,7 @@ export class TransactionService {
       await TransactionRepository.create(
         {
           ref_id,
+          user_id: userId ?? null,
           product_code: dto.product_code,
           channel_code: dto.channel_code,
           amount,
@@ -168,7 +259,7 @@ export class TransactionService {
           email: dto.email,
           account_data: dto.account_data,
           status: "PENDING",
-          payment_type: channel.type as "QR_CODE" | "BANK_TRANSFER",
+          payment_type: normalizedPaymentType,
           xendit_id: xenditResponse.id ?? null,
           qr_string,
           va_number,
@@ -186,7 +277,7 @@ export class TransactionService {
     return {
       ref_id,
       amount,
-      payment_type: channel.type as "QR_CODE" | "BANK_TRANSFER",
+      payment_type: normalizedPaymentType,
       qr_string,
       va_number,
       expired_at: expired_at ? expired_at.toISOString() : null,

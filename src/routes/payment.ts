@@ -4,6 +4,7 @@ import { TransactionService } from "../services/transaction";
 import { WebhookService } from "../services/webhook";
 import { Validation } from "../validation";
 import { TransactionValidation } from "../validation/transaction.validation";
+import { Auth } from "../config/auth";
 import {
   xenditWebhookVerification,
   digiflazzWebhookVerification,
@@ -30,9 +31,6 @@ PaymentRoute.get('/invoice/:ref_id', async (req: Request, res: Response, next: N
     }
 })
 
-
-
-
 PaymentRoute.post('/webhook', xenditWebhookVerification, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const result = await WebhookService.handleXenditCallback(req.body)
@@ -41,11 +39,6 @@ PaymentRoute.post('/webhook', xenditWebhookVerification, async (req: Request, re
         next(error)
     }
 })
-
-
-
-
-
 
 PaymentRoute.post('/digiflazz-webhook', digiflazzWebhookVerification, async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -61,7 +54,19 @@ PaymentRoute.post(
     async (req: Request, res: Response, next: NextFunction) => {
         try {
             const body = Validation.validate(TransactionValidation.createOrder, req.body)
-            const data = await TransactionService.createOrder(body)
+
+            let userId: string | null = null;
+            const token = req.cookies?.access_token?.replace(/Bearer /g, "");
+            if (token) {
+                try {
+                    const payload = await Auth.validate(token, true);
+                    userId = payload.user_id;
+                } catch {
+                    userId = null;
+                }
+            }
+
+            const data = await TransactionService.createOrder(body, userId)
             res.status(201).json({ status: true, message: "Order created successfully", data })
         } catch (error) {
             console.log(error)

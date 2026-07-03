@@ -70,7 +70,7 @@ export class AuthRepositories {
         );
     }
 
-    static async createUserByRegister(payload: RequestRegisterUser): Promise<ResponseCreateUser> {
+    static async createUserByRegister(payload: RequestRegisterUser, role_id?: string): Promise<ResponseCreateUser> {
         const hashed = await bcrypt.hash(payload.password, 12);
 
         const [result] = await sequelize_main.query<ResponseCreateUser>(
@@ -79,7 +79,7 @@ export class AuthRepositories {
                 replacements: {
                     email: payload.email.toLowerCase(),
                     name: payload.name,
-                    role_id: ROLES.USER.id
+                    role_id: role_id || ROLES.USER.id
                 },
                 type: QueryTypes.SELECT,
             }

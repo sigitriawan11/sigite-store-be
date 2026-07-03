@@ -52,4 +52,4 @@ export interface InvoiceResult {
 export type ProviderStatus = 'Pending' | 'Process' | 'Success';
 
 export type TransactionStatus = 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED';
-export type PaymentType = 'QR_CODE' | 'BANK_TRANSFER';
+export type PaymentType = 'QR_CODE' | 'BANK_TRANSFER' | 'EWALLET' | 'BALANCE';

@@ -6,7 +6,7 @@ import { Auth } from "../config/auth";
 import { v4 as uuidv4 } from 'uuid';
 import { Helpers } from "../helpers/Helpers";
 import moment from "moment-timezone"
-
+import { AppSettingService } from "./settings";
 
 export class AuthService {
     static async createUser(payload: RequestCreateUser): Promise<ResponseCreateUser> {
@@ -29,7 +29,6 @@ export class AuthService {
         const user = await UserRepository.findUserByEmailNotDeletedAndActive(email)
 
         const lockedUntil = moment(user.locked_until);
-
 
         if (lockedUntil.isAfter(now)) {
             const minutesLeft = Math.ceil(lockedUntil.diff(now, 'minutes', true));
@@ -127,12 +126,29 @@ export class AuthService {
     }
 
     static async registerUser(payload: RequestRegisterUser) {
+        const allowRegistration = await AppSettingService.getSetting("allow_registration");
+        if (allowRegistration === false) {
+            throw new ErrBadRequest("Registration is currently disabled. Please contact support.");
+        }
+
         await UserRepository.checkUserIfExistsByEmail(payload.email)
 
-        const user = await AuthRepositories.createUserByRegister({
-            ...payload,
-            phone_number: Helpers.normalizePhoneNumber(payload.phone_number)
-        })
+        let defaultRoleId: string | undefined;
+        try {
+            const roleIdSetting = await AppSettingService.getSetting("default_role_id");
+            if (roleIdSetting && typeof roleIdSetting === "string") {
+                defaultRoleId = roleIdSetting;
+            }
+        } catch {
+        }
+
+        const user = await AuthRepositories.createUserByRegister(
+            {
+                ...payload,
+                phone_number: Helpers.normalizePhoneNumber(payload.phone_number)
+            },
+            defaultRoleId
+        )
 
         return user
     }

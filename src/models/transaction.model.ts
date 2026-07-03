@@ -4,6 +4,7 @@ import { PaymentType, TransactionStatus } from "../types/transaction-type";
 export interface TransactionAttributes {
   id: number;
   ref_id: string;
+  user_id?: string | null;
   product_code: string;
   channel_code: string;
   amount: number;
@@ -29,6 +30,7 @@ class Transaction
   implements TransactionAttributes {
   public id!: number;
   public ref_id!: string;
+  public user_id!: string | null;
   public product_code!: string;
   public channel_code!: string;
   public amount!: number;
@@ -59,6 +61,10 @@ export const TransactionModel = (sequelize: Sequelize) => {
         type: DataTypes.STRING(100),
         allowNull: false,
         unique: true,
+      },
+      user_id: {
+        type: DataTypes.UUID,
+        allowNull: true,
       },
       product_code: {
         type: DataTypes.STRING(100),
@@ -91,7 +97,7 @@ export const TransactionModel = (sequelize: Sequelize) => {
         defaultValue: 'PENDING',
       },
       payment_type: {
-        type: DataTypes.ENUM('QR_CODE', 'BANK_TRANSFER'),
+        type: DataTypes.ENUM('QR_CODE', 'BANK_TRANSFER', 'EWALLET', 'BALANCE'),
         allowNull: false,
       },
       xendit_id: {

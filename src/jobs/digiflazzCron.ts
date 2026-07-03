@@ -2,7 +2,6 @@ import { Product } from "../databases/main.db";
 import { DigiflazzService } from "../services/digiflazz";
 import cron from "node-cron";
 
-
 export const startSyncProductDigiflazzCron = () => {
     cron.schedule("*/5 * * * *", async () => {
         console.log('Start sync product')

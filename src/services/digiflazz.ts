@@ -3,6 +3,7 @@ import md5 from "md5";
 import { ErrBadRequest } from "../config/errors";
 import { ProductCategory } from "../databases/main.db";
 import { Helpers } from "../helpers/Helpers";
+import { PricingService } from "./pricing";
 
 type CmdType = 'depo' | 'pricelist' | 'ref_id';
 
@@ -77,17 +78,18 @@ export class DigiflazzService {
             ])
         );
 
+        const margin = await PricingService.getMargin();
+        
         const mappedProducts = data
             .map((p: any) => {
                 const brand_id = brandMap.get(Helpers.normalizeUpper(p.brand));
-
                 if (!brand_id) return null;
 
                 return {
                     code: p.buyer_sku_code,
                     product_name: p.product_name,
                     brand_id,
-                    price: Math.ceil(p.price + (p.price * 0.01)),
+                    price: PricingService.calculatePriceFromMargin(p.price, margin.margin_percent),
                     status: p.buyer_product_status,
                     raw_json: p,
                 };

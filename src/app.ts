@@ -36,6 +36,12 @@ app.use(
     maxAge: '7d'
   })
 );
+app.use(
+  "/uploads",
+  express.static(path.join(process.cwd(), "uploads"), {
+    maxAge: '7d'
+  })
+);
 
 startSyncProductDigiflazzCron();
 
@@ -50,7 +56,7 @@ app.use(errorMiddleware)
 app.all('{*splat}', (req, res) => {
   res.status(404).send({
     status: false,
-    message: "Hello Operaon Here !!!"
+    message: "Hello Sigite Store Here !!!"
   })
 })
 
